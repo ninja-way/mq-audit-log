@@ -8,28 +8,22 @@ import (
 
 type Server struct {
 	AuditServer *AuditServer
-	MqUri       string
+
+	conn *amqp.Connection
+	ch   *amqp.Channel
+	q    amqp.Queue
 }
 
 func NewServer(MqUri string, auditServer *AuditServer) *Server {
-	return &Server{
-		AuditServer: auditServer,
-		MqUri:       MqUri,
-	}
-}
-
-func (s *Server) StartListen() {
-	conn, err := amqp.Dial(s.MqUri)
+	conn, err := amqp.Dial(MqUri)
 	if err != nil {
 		log.Fatal("failed to connect to rabbitmq")
 	}
-	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatal("failed to open a channel")
 	}
-	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
 		"logs", // name
@@ -43,14 +37,28 @@ func (s *Server) StartListen() {
 		log.Fatal("failed to declare a queue")
 	}
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+	return &Server{
+		AuditServer: auditServer,
+		conn:        conn,
+		ch:          ch,
+		q:           q,
+	}
+}
+
+func (s *Server) CloseServerConnection() {
+	s.ch.Close()
+	s.conn.Close()
+}
+
+func (s *Server) StartListen() {
+	msgs, err := s.ch.Consume(
+		s.q.Name, // queue
+		"",       // consumer
+		true,     // auto-ack
+		false,    // exclusive
+		false,    // no-local
+		false,    // no-wait
+		nil,      // args
 	)
 	if err != nil {
 		log.Fatal("failed to register a consumer")

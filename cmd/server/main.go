@@ -37,5 +37,6 @@ func main() {
 	auditSrv := transport.NewAuditServer(auditService)
 
 	srv := transport.NewServer(cfg.MQ.URI, auditSrv)
+	defer srv.CloseServerConnection()
 	srv.StartListen()
 }
